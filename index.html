@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Sistem Manajemen Risiko OPD | Multi OPD + Cetak Laporan Rapi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; }
+        .modal { transition: opacity 0.25s ease; }
+        @media print {
+            body * { visibility: hidden; }
+            #printable-report, #printable-report * { visibility: visible; }
+            #printable-report { position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 15px; background: white; z-index: 9999; }
+        }
+        .report-container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .report-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #1e3a8a; padding-bottom: 8px; }
+        .report-title { font-size: 22px; font-weight: bold; color: #1e3a8a; }
+        table.report-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 11px; }
+        .report-table th, .report-table td { border: 1px solid #aaa; padding: 6px 4px; text-align: left; vertical-align: top; word-break: break-word; }
+        .report-table th { background: #e5e7eb; font-weight: 600; text-align: center; }
+        .risk-level-high { background-color: #fee2e2; }
+        .risk-level-medium { background-color: #fff3e3; }
+        .risk-level-low { background-color: #e6f7e6; }
+        .datetime { font-size: 0.85rem; font-family: monospace; }
+        .risk-table th, .risk-table td { white-space: normal; word-break: break-word; }
+        .mitigasi-table td.rtp-cell { word-break: break-word; white-space: normal; }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- LOGIN VIEW -->
+    <div id="loginContainer" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-800 to-indigo-900">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+            <div class="text-center mb-6">
+                <i class="fas fa-shield-alt text-5xl text-indigo-600"></i>
+                <h2 class="text-3xl font-bold mt-3 text-gray-800">Sistem Manajemen Risiko</h2>
+                <p class="text-gray-500">RSO & ROO Terintegrasi (Multi OPD)</p>
+            </div>
+            <form id="loginForm">
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-medium mb-1">Username</label>
+                    <input type="text" id="username" class="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="" value="">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-gray-700 font-medium mb-1">Password</label>
+                    <input type="password" id="password" class="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="••••••" value="admin123">
+                </div>
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg transition">Masuk Dashboard</button>
+            </form>
+            <p class="text-xs text-center text-gray-400 mt-6">Masih dalam Pengembangan</p>
+            <div class="text-center mt-4">
+                <button id="forceResetBtn" class="text-sm text-red-500 hover:text-red-700 underline">Reset Data & Coba Lagi</button>
+            </div>
+            <div id="loginErrorMsg" class="text-red-500 text-center text-sm mt-3"></div>
+        </div>
+    </div>
+
+    <!-- MAIN APP DASHBOARD -->
+    <div id="appContainer" style="display: none;">
+        <div class="flex h-screen bg-gray-100">
+            <aside class="w-72 bg-white shadow-xl z-10 flex-shrink-0 overflow-y-auto">
+                <div class="p-5 border-b flex items-center gap-3">
+                    <i class="fas fa-chart-line text-2xl text-indigo-600"></i>
+                    <span class="font-bold text-xl text-gray-800">Risk<span class="text-indigo-600">Manager</span></span>
+                </div>
+                <nav class="mt-6 px-3 space-y-1">
+                    <a href="#" data-page="dashboard" class="nav-link flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-indigo-50"><i class="fas fa-tachometer-alt w-5"></i> Dashboard</a>
+                    <a href="#" data-page="master" class="nav-link flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-indigo-50"><i class="fas fa-database w-5"></i> Master Data</a>
+                    <a href="#" data-page="rso" class="nav-link flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-indigo-50"><i class="fas fa-flag-checkered w-5"></i> RSO (Risiko Strategis)</a>
+                    <a href="#" data-page="roo" class="nav-link flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-indigo-50"><i class="fas fa-chart-simple w-5"></i> ROO (Operasional)</a>
+                    <a href="#" data-page="riskRegister" class="nav-link flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-indigo-50"><i class="fas fa-book-open w-5"></i> Risk Register</a>
+                    <a href="#" data-page="mitigasi" class="nav-link flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-indigo-50"><i class="fas fa-tasks w-5"></i> Mitigasi & RTP</a>
+                    <a href="#" data-page="monitoring" class="nav-link flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-indigo-50"><i class="fas fa-chart-line w-5"></i> Monitoring & Heatmap</a>
+                    <a href="#" data-page="pelaporan" class="nav-link flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-indigo-50"><i class="fas fa-print w-5"></i> Pelaporan</a>
+                    <a href="#" data-page="profile" class="nav-link flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-indigo-50"><i class="fas fa-user-lock w-5"></i> Ganti Password</a>
+                    <a href="#" data-page="users" class="nav-link flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-indigo-50"><i class="fas fa-users w-5"></i> Users & Roles</a>
+                    <a href="#" data-page="settings" class="nav-link flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-indigo-50"><i class="fas fa-cog w-5"></i> Pengaturan</a>
+                </nav>
+                <div class="absolute bottom-6 left-6 right-6">
+                    <button id="logoutBtn" class="w-full flex items-center gap-2 text-red-500 hover:text-red-700"><i class="fas fa-sign-out-alt"></i> Logout</button>
+                </div>
+            </aside>
+
+            <main class="flex-1 overflow-y-auto p-6 bg-gray-50">
+                <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex justify-between items-center">
+                    <h1 id="pageTitle" class="text-2xl font-bold text-gray-800">Dashboard</h1>
+                    <div class="flex items-center gap-4">
+                        <div class="text-right">
+                            <div id="currentYear" class="text-sm font-semibold text-gray-600"></div>
+                            <div id="currentTime" class="text-xs font-mono text-gray-500 datetime"></div>
+                        </div>
+                        <div class="flex items-center gap-3 border-l pl-4">
+                            <i class="fas fa-user-circle text-2xl text-gray-500"></i>
+                            <span id="userDisplay" class="text-gray-700">Admin</span>
+                            <span id="userOpdDisplay" class="text-sm text-gray-500"></span>
+                        </div>
+                    </div>
+                </div>
+                <div id="pageContent" class="transition-all"></div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // ---------- DATA & STORAGE ----------
+        let risks = [];
+        let master = { opd: ["Dinas Penanaman Modal", "Dinas PU", "BKPSDM"], kategori: ["Strategis", "Operasional"], periode: ["2025-2026", "2026-2027"] };
+        const DEFAULT_USERS = [
+            { id:1, username:"admin", password:"admin", role:"Admin", opd:null },
+            { id:2, username:"dinas_pu", password:"pu123", role:"OPD", opd:"Dinas PU" },
+            { id:3, username:"dinas_penanaman_modal", password:"pm123", role:"OPD", opd:"Dinas Penanaman Modal" }
+        ];
+        let users = [];
+        let currentUser = null;
+
+        function updateDateTime() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const time = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            if(document.getElementById('currentYear')) document.getElementById('currentYear').innerText = `Tahun: ${year}`;
+            if(document.getElementById('currentTime')) document.getElementById('currentTime').innerText = time;
+        }
+        setInterval(updateDateTime, 1000);
+
+        function resetLocalStorageAndReload() {
+            localStorage.removeItem('riskData');
+            initData(true);
+            alert("Data telah direset ulang. Silakan login kembali dengan admin/admin");
+            window.location.reload();
+        }
+
+        function initData(forceReset = false) {
+            const currentYear = new Date().getFullYear();
+            if(forceReset || !localStorage.getItem('riskData')) {
+                risks = [
+                    { id: "RSO.26.1.1.01", name: "Tidak tepat sasaran investasi", category: "Strategis", opd: "Dinas Penanaman Modal", tahun: currentYear,
+                      tujuan: "Meningkatkan investasi daerah", sasaran: "Realisasi investasi 20%", program: "Program Peningkatan Investasi", iku: "Persentase pertumbuhan investasi",
+                      pemilik: "Kepala Dinas Penanaman Modal", penyebab: "Perencanaan kurang matang", dampak: "Kinerja investasi menurun",
+                      dampakSkor: 4, kemungkinanSkor: 3, skalaRisiko: 12, statusMitigasi: "Dalam Evaluasi", controlExisting: "SOP Monitoring", rencanaMitigasi: "Revisi kriteria sasaran", targetWaktu: "Q2 2026" },
+                    { id: "ROO.26.1.1.01", name: "Keterlambatan pelaporan realisasi anggaran", category: "Operasional", opd: "Dinas PU", tahun: currentYear,
+                      program: "Program Pengelolaan Keuangan", kegiatan: "Penyusunan Laporan Keuangan", subKegiatan: "Rekonsiliasi data", pemilik: "Kabag Keuangan",
+                      penyebab: "Sistem aplikasi error", dampak: "Denda administrasi", dampakSkor: 2, kemungkinanSkor: 4, skalaRisiko: 8,
+                      statusMitigasi: "Perbaikan sistem", controlExisting: "Aplikasi manual", rencanaMitigasi: "Implementasi e-planning", targetWaktu: "Juni 2026" },
+                    { id: "RSO.26.1.1.02", name: "Cuaca buruk ganggu promosi investasi", category: "Strategis", opd: "Dinas Penanaman Modal", tahun: currentYear,
+                      tujuan: "Meningkatkan promosi investasi", sasaran: "Peningkatan nilai investasi 15%", program: "Program Promosi Investasi", iku: "Jumlah kerjasama investasi",
+                      pemilik: "Kepala Bidang Promosi", penyebab: "Faktor eksternal cuaca", dampak: "Kegiatan promosi tertunda",
+                      dampakSkor: 3, kemungkinanSkor: 2, skalaRisiko: 6, statusMitigasi: "Rencana Kontijensi", controlExisting: "Belum ada", rencanaMitigasi: "Penyediaan venue indoor", targetWaktu: "2026" }
+                ];
+                users = JSON.parse(JSON.stringify(DEFAULT_USERS));
+                saveToLocal();
+            } else {
+                let stored = JSON.parse(localStorage.getItem('riskData'));
+                risks = stored.risks || [];
+                master = stored.master || master;
+                users = stored.users || [];
+                if(!users || users.length === 0 || !users.find(u => u.username === "admin")) {
+                    users = JSON.parse(JSON.stringify(DEFAULT_USERS));
+                    saveToLocal();
+                }
+            }
+        }
+        function saveToLocal() { localStorage.setItem('riskData', JSON.stringify({risks, master, users})); }
+        function getRiskLevel(skala) { if(skala>=12) return 'Tinggi'; if(skala>=6) return 'Sedang'; return 'Rendah'; }
+        function getFilteredRisks() {
+            if(currentUser.role === 'Admin') return risks;
+            return risks.filter(r => r.opd === currentUser.opd);
+        }
+
+        // ---------- CETAK LAPORAN (tabel rapi) ----------
+        function generateFullReportHTML(selectedOpd = null, selectedYear = null) {
+            let filtered = getFilteredRisks();
+            if(currentUser.role === 'Admin') {
+                if(selectedOpd) filtered = risks.filter(r => r.opd === selectedOpd);
+                if(selectedYear) filtered = filtered.filter(r => r.tahun == selectedYear);
+            }
+            let totalRisk = filtered.length;
+            let highRisk = filtered.filter(r => getRiskLevel(r.skalaRisiko) === 'Tinggi').length;
+            let mediumRisk = filtered.filter(r => getRiskLevel(r.skalaRisiko) === 'Sedang').length;
+            let lowRisk = filtered.filter(r => getRiskLevel(r.skalaRisiko) === 'Rendah').length;
+            let avgRiskScore = totalRisk ? (filtered.reduce((a,b)=>a+b.skalaRisiko,0)/totalRisk).toFixed(1) : 0;
+            let tgl = new Date().toLocaleDateString('id-ID');
+            let titleOpd = (currentUser.role === 'Admin' && selectedOpd) ? selectedOpd : (currentUser.role === 'Admin' ? 'SEMUA OPD' : currentUser.opd);
+            let titleYear = (currentUser.role === 'Admin' && selectedYear) ? selectedYear : 'SEMUA TAHUN';
+            
+            let rows = filtered.map(r => {
+                let spesifik = r.category === "Strategis" 
+                    ? `<td>Tujuan: ${r.tujuan || '-'}<br>Sasaran: ${r.sasaran || '-'}<br>Program: ${r.program || '-'}<br>IKU: ${r.iku || '-'}</td>`
+                    : `<td>Program: ${r.program || '-'}<br>Kegiatan: ${r.kegiatan || '-'}<br>Sub Kegiatan: ${r.subKegiatan || '-'}</td>`;
+                return `<tr class="${r.skalaRisiko>=12 ? 'risk-level-high' : (r.skalaRisiko>=6 ? 'risk-level-medium' : 'risk-level-low')}">
+                    <td>${r.id}</td><td>${r.name}</td><td>${r.category}</td><td>${r.opd || '-'}</td>
+                    <td>${r.tahun || '-'}</td>${spesifik}
+                    <td>${r.pemilik}</td><td>${r.penyebab || '-'}</td><td>${r.dampak || '-'}</td>
+                    <td class="text-center">${r.dampakSkor}</td><td class="text-center">${r.kemungkinanSkor}</td><td class="text-center">${r.skalaRisiko}</td>
+                    <td class="text-center">${getRiskLevel(r.skalaRisiko)}</td><td>${r.rencanaMitigasi || '-'}</td>
+                </tr>`;
+            }).join('');
+            
+            return `<div id="printable-report" class="report-container">
+                <div class="report-header">
+                    <div class="report-title">LAPORAN MANAJEMEN RISIKO OPD</div>
+                    <div class="text-sm">Pemerintah Kabupaten Paniai - RSO & ROO Terintegrasi</div>
+                    <div class="text-sm">OPD: ${titleOpd} | Tahun: ${titleYear} | Tanggal Cetak: ${tgl}</div>
+                </div>
+                <h3 class="font-bold text-md">Ringkasan Eksekutif</h3>
+                <table class="report-table summary-table" style="width: 60%;">
+                    <tr><th>Total Risiko</th><td>${totalRisk}</td><th>Risiko Tinggi</th><td>${highRisk}</td></tr>
+                    <tr><th>Risiko Sedang</th><td>${mediumRisk}</td><th>Risiko Rendah</th><td>${lowRisk}</td></tr>
+                    <tr><th>Skala Rata-rata</th><td colspan="3">${avgRiskScore}</td></tr>
+                </table>
+                <h3 class="font-bold text-md">Prioritas Risiko (Top 5)</h3>
+                <table class="report-table" style="width: 60%;">
+                    <thead><tr><th>Kode</th><th>Risiko</th><th>Skala</th><th>Level</th></tr></thead>
+                    <tbody>${filtered.sort((a,b)=>b.skalaRisiko - a.skalaRisiko).slice(0,5).map(r => `<tr><td>${r.id}</td><td>${r.name}</td><td class="text-center">${r.skalaRisiko}</td><td class="text-center">${getRiskLevel(r.skalaRisiko)}</td></tr>`).join('')}</tbody>
+                </table>
+                <h3 class="font-bold text-md">Daftar Lengkap Risiko</h3>
+                <table class="report-table">
+                    <thead>
+                        <tr><th>Kode</th><th>Uraian</th><th>Kategori</th><th>OPD</th><th>Tahun</th>
+                        <th>Program/Sasaran</th><th>Pemilik</th><th>Penyebab</th><th>Dampak</th>
+                        <th>Dampak Skor</th><th>Kemungkinan</th><th>Skala</th><th>Level</th><th>RTP</th>
+                    </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <div style="margin-top:20px; font-size:9px; text-align:center;">Dokumen otomatis dari Sistem Manajemen Risiko Kab. Paniai</div>
+            </div>`;
+        }
+        
+        function printFullReport(selectedOpd = null, selectedYear = null) {
+            let reportHTML = generateFullReportHTML(selectedOpd, selectedYear);
+            let printWindow = window.open('', '_blank');
+            printWindow.document.write(`<html><head><title>Laporan Risiko Kab. Paniai</title><style>
+                body { margin: 0; padding: 15px; font-family: 'Inter', sans-serif; }
+                .report-container { max-width: 1200px; margin: 0 auto; background: white; }
+                .report-header { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #1e3a8a; }
+                .report-title { font-size: 20px; font-weight: bold; color: #1e3a8a; }
+                table.report-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10px; }
+                .report-table th, .report-table td { border: 1px solid #999; padding: 4px 6px; vertical-align: top; word-break: break-word; }
+                .report-table th { background: #e5e7eb; text-align: center; }
+                .text-center { text-align: center; }
+                .risk-level-high { background-color: #fee2e2; }
+                .risk-level-medium { background-color: #fff3e3; }
+                .risk-level-low { background-color: #e6f7e6; }
+                .summary-table { width: auto; }
+                @media print { body { margin: 0; padding: 0; } }
+            </style></head><body>${reportHTML}<script>window.onload=function(){window.print();setTimeout(function(){window.close();},1000);}<\/script></body></html>`);
+            printWindow.document.close();
+        }
+
+        // ---------- MODAL FORM DINAMIS ----------
+        function showRiskModal(categoryDefault = "Strategis", riskToEdit = null) {
+            let isEdit = !!riskToEdit;
+            let currentCategory = isEdit ? riskToEdit.category : categoryDefault;
+            let modalDiv = document.createElement('div');
+            modalDiv.className = "modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50";
+            let opdField = (currentUser.role === 'Admin')
+                ? `<select id="riskOpd" class="w-full border rounded p-2" required><option value="">Pilih OPD</option>${master.opd.map(o => `<option value="${o}" ${(isEdit && riskToEdit.opd === o) ? 'selected' : ''}>${o}</option>`).join('')}</select>`
+                : `<input type="text" id="riskOpd" class="w-full border rounded p-2 bg-gray-100" readonly value="${currentUser.opd}">`;
+            let currentYearVal = isEdit ? (riskToEdit.tahun || new Date().getFullYear()) : new Date().getFullYear();
+            let specificFieldsContainerId = "specific-fields-container";
+            function getSpecificFieldsHTML(category, editData = null) {
+                if (category === 'Strategis') {
+                    return `<div id="specific-fields">
+                        <input id="tujuan" placeholder="Tujuan Strategis" class="w-full border rounded p-2" value="${editData ? (editData.tujuan||'') : ''}">
+                        <input id="sasaran" placeholder="Sasaran Strategis" class="w-full border rounded p-2" value="${editData ? (editData.sasaran||'') : ''}">
+                        <input id="programRso" placeholder="Program Strategis" class="w-full border rounded p-2" value="${editData ? (editData.program||'') : ''}">
+                        <input id="iku" placeholder="IKU Program" class="w-full border rounded p-2" value="${editData ? (editData.iku||'') : ''}">
+                    </div>`;
+                } else {
+                    return `<div id="specific-fields">
+                        <input id="programRoo" placeholder="Program" class="w-full border rounded p-2" value="${editData ? (editData.program||'') : ''}">
+                        <input id="kegiatan" placeholder="Kegiatan" class="w-full border rounded p-2" value="${editData ? (editData.kegiatan||'') : ''}">
+                        <input id="subKegiatan" placeholder="Sub Kegiatan" class="w-full border rounded p-2" value="${editData ? (editData.subKegiatan||'') : ''}">
+                    </div>`;
+                }
+            }
+            modalDiv.innerHTML = `<div class="bg-white rounded-xl w-full max-w-lg p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+                <h3 class="text-xl font-bold mb-3">${isEdit ? 'Edit' : 'Tambah'} Risiko</h3>
+                <div class="space-y-3">
+                    <input id="riskId" placeholder="Kode Risiko" class="w-full border rounded p-2" value="${isEdit ? riskToEdit.id : ''}">
+                    <input id="riskName" placeholder="Uraian Risiko" class="w-full border rounded p-2" value="${isEdit ? riskToEdit.name : ''}">
+                    <select id="riskCategory" class="w-full border rounded p-2">
+                        <option value="Strategis" ${currentCategory === 'Strategis' ? 'selected' : ''}>Strategis</option>
+                        <option value="Operasional" ${currentCategory === 'Operasional' ? 'selected' : ''}>Operasional</option>
+                    </select>
+                    <div><label class="text-sm font-medium">OPD</label> ${opdField}</div>
+                    <div><label class="text-sm font-medium">Tahun Anggaran</label><input id="riskYear" type="number" min="2020" max="2030" class="w-full border rounded p-2" value="${currentYearVal}" required></div>
+                    <div id="${specificFieldsContainerId}">${getSpecificFieldsHTML(currentCategory, isEdit ? riskToEdit : null)}</div>
+                    <input id="riskOwner" placeholder="Pemilik Risiko" class="w-full border rounded p-2" value="${isEdit ? riskToEdit.pemilik : ''}">
+                    <input id="riskCause" placeholder="Penyebab" class="w-full border rounded p-2" value="${isEdit ? riskToEdit.penyebab : ''}">
+                    <textarea id="riskImpact" placeholder="Dampak" class="w-full border rounded p-2">${isEdit ? riskToEdit.dampak : ''}</textarea>
+                    <div class="flex gap-2"><label>Skala Dampak (1-5):</label><input id="impactScore" type="number" min="1" max="5" class="border rounded w-20 p-1" value="${isEdit ? riskToEdit.dampakSkor : 3}">
+                    <label>Skala Kemungkinan:</label><input id="likeScore" type="number" min="1" max="5" class="border rounded w-20 p-1" value="${isEdit ? riskToEdit.kemungkinanSkor : 3}"></div>
+                    <input id="controlExisting" placeholder="Pengendalian yang sudah ada" class="w-full border rounded p-2" value="${isEdit ? (riskToEdit.controlExisting||'') : ''}">
+                    <input id="rencanaMitigasi" placeholder="Rencana Tindak Pengendalian (RTP)" class="w-full border rounded p-2" value="${isEdit ? (riskToEdit.rencanaMitigasi||'') : ''}">
+                    <input id="targetWaktu" placeholder="Target Waktu" class="w-full border rounded p-2" value="${isEdit ? (riskToEdit.targetWaktu||'') : ''}">
+                    <select id="statusMitigasi" class="w-full border rounded p-2">
+                        <option ${isEdit && riskToEdit.statusMitigasi=='Baru' ? 'selected' : ''}>Baru</option>
+                        <option ${isEdit && riskToEdit.statusMitigasi=='Dalam Evaluasi' ? 'selected' : ''}>Dalam Evaluasi</option>
+                        <option ${isEdit && riskToEdit.statusMitigasi=='Rencana Kontijensi' ? 'selected' : ''}>Rencana Kontijensi</option>
+                        <option ${isEdit && riskToEdit.statusMitigasi=='Perbaikan sistem' ? 'selected' : ''}>Perbaikan sistem</option>
+                        <option ${isEdit && riskToEdit.statusMitigasi=='Selesai' ? 'selected' : ''}>Selesai</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-3 mt-5"><button id="closeModal" class="px-4 py-2 bg-gray-300 rounded">Batal</button><button id="saveRiskBtn" class="px-4 py-2 bg-indigo-600 text-white rounded">Simpan</button></div>
+            </div>`;
+            document.body.appendChild(modalDiv);
+            const categorySelect = modalDiv.querySelector('#riskCategory');
+            const container = modalDiv.querySelector(`#${specificFieldsContainerId}`);
+            function refreshSpecificFields() {
+                const selectedCat = categorySelect.value;
+                const currentValues = {
+                    tujuan: modalDiv.querySelector('#tujuan')?.value || '',
+                    sasaran: modalDiv.querySelector('#sasaran')?.value || '',
+                    programRso: modalDiv.querySelector('#programRso')?.value || '',
+                    iku: modalDiv.querySelector('#iku')?.value || '',
+                    programRoo: modalDiv.querySelector('#programRoo')?.value || '',
+                    kegiatan: modalDiv.querySelector('#kegiatan')?.value || '',
+                    subKegiatan: modalDiv.querySelector('#subKegiatan')?.value || ''
+                };
+                if (selectedCat === 'Strategis') {
+                    container.innerHTML = `<div id="specific-fields">
+                        <input id="tujuan" placeholder="Tujuan Strategis" class="w-full border rounded p-2" value="${currentValues.tujuan}">
+                        <input id="sasaran" placeholder="Sasaran Strategis" class="w-full border rounded p-2" value="${currentValues.sasaran}">
+                        <input id="programRso" placeholder="Program Strategis" class="w-full border rounded p-2" value="${currentValues.programRso}">
+                        <input id="iku" placeholder="IKU Program" class="w-full border rounded p-2" value="${currentValues.iku}">
+                    </div>`;
+                } else {
+                    container.innerHTML = `<div id="specific-fields">
+                        <input id="programRoo" placeholder="Program" class="w-full border rounded p-2" value="${currentValues.programRoo}">
+                        <input id="kegiatan" placeholder="Kegiatan" class="w-full border rounded p-2" value="${currentValues.kegiatan}">
+                        <input id="subKegiatan" placeholder="Sub Kegiatan" class="w-full border rounded p-2" value="${currentValues.subKegiatan}">
+                    </div>`;
+                }
+            }
+            categorySelect.addEventListener('change', refreshSpecificFields);
+            const close = () => modalDiv.remove();
+            modalDiv.querySelector('#closeModal').onclick = close;
+            modalDiv.querySelector('#saveRiskBtn').onclick = () => {
+                let id = modalDiv.querySelector('#riskId').value.trim() || ("RISK."+Date.now());
+                let category = modalDiv.querySelector('#riskCategory').value;
+                let opd = (currentUser.role !== 'Admin') ? currentUser.opd : modalDiv.querySelector('#riskOpd').value;
+                let tahun = parseInt(modalDiv.querySelector('#riskYear').value);
+                if(!opd) { alert("OPD harus dipilih!"); return; }
+                if(!tahun || tahun < 2020) { alert("Tahun anggaran harus diisi (min 2020)!"); return; }
+                let newRisk = {
+                    id, name: modalDiv.querySelector('#riskName').value, category, opd, tahun,
+                    pemilik: modalDiv.querySelector('#riskOwner').value, penyebab: modalDiv.querySelector('#riskCause').value,
+                    dampak: modalDiv.querySelector('#riskImpact').value,
+                    dampakSkor: parseInt(modalDiv.querySelector('#impactScore').value)||3,
+                    kemungkinanSkor: parseInt(modalDiv.querySelector('#likeScore').value)||3,
+                    skalaRisiko: (parseInt(modalDiv.querySelector('#impactScore').value)||3)*(parseInt(modalDiv.querySelector('#likeScore').value)||3),
+                    controlExisting: modalDiv.querySelector('#controlExisting').value,
+                    rencanaMitigasi: modalDiv.querySelector('#rencanaMitigasi').value,
+                    targetWaktu: modalDiv.querySelector('#targetWaktu').value,
+                    statusMitigasi: modalDiv.querySelector('#statusMitigasi').value,
+                };
+                if(category === 'Strategis') {
+                    newRisk.tujuan = modalDiv.querySelector('#tujuan')?.value || '';
+                    newRisk.sasaran = modalDiv.querySelector('#sasaran')?.value || '';
+                    newRisk.program = modalDiv.querySelector('#programRso')?.value || '';
+                    newRisk.iku = modalDiv.querySelector('#iku')?.value || '';
+                    delete newRisk.kegiatan;
+                    delete newRisk.subKegiatan;
+                } else {
+                    newRisk.program = modalDiv.querySelector('#programRoo')?.value || '';
+                    newRisk.kegiatan = modalDiv.querySelector('#kegiatan')?.value || '';
+                    newRisk.subKegiatan = modalDiv.querySelector('#subKegiatan')?.value || '';
+                    delete newRisk.tujuan;
+                    delete newRisk.sasaran;
+                    delete newRisk.iku;
+                }
+                let existingIndex = risks.findIndex(r=>r.id===newRisk.id);
+                if(existingIndex>=0) risks[existingIndex] = newRisk;
+                else risks.push(newRisk);
+                saveToLocal();
+                close();
+                renderPage(currentPage);
+            };
+        }
+
+        function editRisk(id) {
+            let risk = risks.find(r=>r.id===id);
+            if(risk) showRiskModal(risk.category, risk);
+        }
+
+        // ---------- GANTI PASSWORD ----------
+        function renderProfile() {
+            pageTitle.innerText = "Ganti Password";
+            let html = `<div class="bg-white rounded-xl shadow p-6 max-w-md mx-auto"><div class="text-center mb-4"><i class="fas fa-user-lock text-5xl text-indigo-600"></i><h3 class="text-xl font-bold mt-2">Ganti Password</h3>
+                <p class="text-gray-500">Username: <strong>${currentUser.username}</strong></p>${currentUser.opd ? `<p class="text-gray-500">OPD: ${currentUser.opd}</p>` : ''}</div>
+                <form id="changePasswordForm"><div class="mb-4"><label class="block text-gray-700 font-medium mb-1">Password Lama</label><input type="password" id="oldPassword" class="w-full border rounded-lg px-4 py-2" required></div>
+                <div class="mb-4"><label>Password Baru</label><input type="password" id="newPassword" class="w-full border rounded-lg px-4 py-2" required></div>
+                <div class="mb-6"><label>Konfirmasi Password Baru</label><input type="password" id="confirmPassword" class="w-full border rounded-lg px-4 py-2" required></div>
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg">Simpan Perubahan</button></form>
+                <div id="passwordMessage" class="mt-4 text-center text-sm"></div></div>`;
+            contentDiv.innerHTML = html;
+            document.getElementById('changePasswordForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                let oldPass = document.getElementById('oldPassword').value;
+                let newPass = document.getElementById('newPassword').value;
+                let confirmPass = document.getElementById('confirmPassword').value;
+                let msgDiv = document.getElementById('passwordMessage');
+                if(currentUser.password !== oldPass) { msgDiv.innerHTML = '<span class="text-red-500">Password lama salah!</span>'; return; }
+                if(newPass !== confirmPass) { msgDiv.innerHTML = '<span class="text-red-500">Password baru dan konfirmasi tidak cocok!</span>'; return; }
+                if(newPass.length < 3) { msgDiv.innerHTML = '<span class="text-red-500">Password minimal 3 karakter!</span>'; return; }
+                let userIndex = users.findIndex(u => u.id === currentUser.id);
+                if(userIndex !== -1) {
+                    users[userIndex].password = newPass;
+                    currentUser.password = newPass;
+                    saveToLocal();
+                    msgDiv.innerHTML = '<span class="text-green-600">Password berhasil diubah!</span>';
+                    document.getElementById('changePasswordForm').reset();
+                    setTimeout(() => msgDiv.innerHTML = '', 3000);
+                } else { msgDiv.innerHTML = '<span class="text-red-500">Terjadi kesalahan, coba lagi.</span>'; }
+            });
+        }
+
+// ---------- ADMIN RESET PASSWORD OPD ----------
+function renderUsers() {
+    if(currentUser.role !== 'Admin') { 
+        pageTitle.innerText = "Users - Tidak Tersedia"; 
+        contentDiv.innerHTML = "<div class='bg-white p-5 rounded-xl shadow'>Hanya Admin yang dapat mengelola user.</div>"; 
+        return; 
+    }
+    pageTitle.innerText = "Manajemen Pengguna & Roles (Admin)";
+    let html = `<div class="bg-white rounded-xl shadow p-5 overflow-x-auto">
+        <div class="flex justify-between flex-wrap gap-2 mb-4">
+            <h3 class="font-bold text-lg">Daftar User OPD</h3>
+            <button id="newUserBtn" class="bg-indigo-500 text-white px-3 py-1 rounded text-sm"><i class="fas fa-plus"></i> Tambah User OPD</button>
+        </div>
+        <table class="min-w-full border">
+            <thead class="bg-gray-100">
+                <tr>
+                    <th class="p-2 text-left">Username</th>
+                    <th class="p-2 text-left">Role</th>
+                    <th class="p-2 text-left">OPD</th>
+                    <th class="p-2 text-left">Password (admin view)</th>
+                    <th class="p-2 text-left">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${users.map(u => `
+                <tr class="border-b">
+                    <td class="p-2">${u.username}</td>
+                    <td class="p-2">${u.role}</td>
+                    <td class="p-2">${u.opd || '-'}</td>
+                    <td class="font-mono text-sm">${u.password}</td>
+                    <td class="p-2">
+                        <button onclick="resetUserPassword(${u.id})" class="bg-yellow-500 text-white px-2 py-1 rounded text-xs"><i class="fas fa-key"></i> Reset</button>
+                        <button onclick="deleteUser(${u.id})" class="bg-red-500 text-white px-2 py-1 rounded text-xs"><i class="fas fa-trash"></i> Hapus</button>
+                    </td>
+                </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        <p class="text-xs text-gray-500 mt-3">* Password ditampilkan agar Admin dapat melihat dan mereset.</p>
+    </div>`;
+    contentDiv.innerHTML = html;
+    
+    document.getElementById('newUserBtn')?.addEventListener('click', () => { 
+        let uname = prompt("Username baru (contoh: dinas_xxx)");
+        if(uname){
+            let opdList = master.opd;
+            let opd = prompt("Pilih OPD untuk user ini:\n" + opdList.join(", "));
+            if(opd && master.opd.includes(opd)){
+                users.push({id:Date.now(), username:uname, password:"123", role:"OPD", opd:opd});
+                saveToLocal(); 
+                renderUsers();
+            } else alert("OPD tidak valid");
+        }
+    });
+}
+
+window.resetUserPassword = (userId) => {
+    let user = users.find(u => u.id === userId);
+    if(!user) return;
+    let newPass = prompt(`Password baru untuk "${user.username}":`, "123456");
+    if(newPass && newPass.trim().length >= 3) {
+        user.password = newPass.trim();
+        saveToLocal();
+        alert(`Password berhasil direset menjadi: ${newPass.trim()}`);
+        renderUsers();
+    } else if(newPass) alert("Minimal 3 karakter!");
+};
+
+window.deleteUser = (id) => { 
+    if(confirm("Yakin hapus user ini?")) { 
+        users = users.filter(u => u.id !== id); 
+        saveToLocal(); 
+        renderUsers(); 
+    } 
+};
+
+
+        // ========== RENDER PAGES ==========
+        function renderDashboard() {
+            let filtered = getFilteredRisks();
+            let high = filtered.filter(r => getRiskLevel(r.skalaRisiko) === 'Tinggi').length;
+            let medium = filtered.filter(r => getRiskLevel(r.skalaRisiko) === 'Sedang').length;
+            let low = filtered.filter(r => getRiskLevel(r.skalaRisiko) === 'Rendah').length;
+            let total = filtered.length;
+            let avgRisk = total ? (filtered.reduce((a,b)=>a+b.skalaRisiko,0)/total).toFixed(1) : 0;
+            contentDiv.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
+                <div class="bg-white rounded-2xl shadow p-5 border-l-8 border-red-500"><div class="text-3xl font-bold">${high}</div><div>Risiko Tinggi</div></div>
+                <div class="bg-white rounded-2xl shadow p-5 border-l-8 border-orange-400"><div class="text-3xl font-bold">${medium}</div><div>Risiko Sedang</div></div>
+                <div class="bg-white rounded-2xl shadow p-5 border-l-8 border-green-500"><div class="text-3xl font-bold">${low}</div><div>Risiko Rendah</div></div>
+                <div class="bg-white rounded-2xl shadow p-5 border-l-8 border-indigo-500"><div class="text-3xl font-bold">${avgRisk}</div><div>Skala Rata-rata</div></div>
+            </div>
+            <div class="grid lg:grid-cols-2 gap-6">
+                <div class="bg-white p-5 rounded-xl shadow"><canvas id="riskChart"></canvas></div>
+                <div class="bg-white p-5 rounded-xl shadow"><h3 class="font-bold text-lg">Prioritas Risiko</h3><ul>${filtered.sort((a,b)=>b.skalaRisiko-a.skalaRisiko).slice(0,5).map(r=>`<li class="flex justify-between border-b py-2"><span>${r.name}</span><span>Skala ${r.skalaRisiko}</span></li>`).join('')}</ul></div>
+            </div>`;
+            setTimeout(()=>{ let ctx=document.getElementById('riskChart')?.getContext('2d'); if(ctx) new Chart(ctx,{type:'doughnut',data:{labels:['Tinggi','Sedang','Rendah'],datasets:[{data:[high,medium,low],backgroundColor:['#ef4444','#f97316','#10b981']}]}}); },50);
+        }
+
+        function renderRSO() {
+            pageTitle.innerText = "Risiko Strategis OPD (RSO)";
+            let filtered = getFilteredRisks().filter(r => r.category === "Strategis");
+            let html = `<div class="mb-4 flex justify-end"><button id="createRsoBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow-md transition flex items-center gap-2"><i class="fas fa-plus"></i> Tambah RSO</button></div>
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden"><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gradient-to-r from-gray-100 to-gray-200"><tr><th class="px-4 py-3 text-left text-xs font-semibold">Kode</th><th>Uraian Risiko</th><th>OPD</th><th>Tahun</th><th>Tujuan</th><th>Sasaran</th><th>Program</th><th>IKU</th><th>Pemilik</th><th class="text-center">Skala</th><th class="text-center">Level</th><th class="text-center">Aksi</th></tr></thead>
+                <tbody>${filtered.map(r => { let lvl=getRiskLevel(r.skalaRisiko); let bg=lvl==='Tinggi'?'bg-red-100 text-red-800':(lvl==='Sedang'?'bg-orange-100 text-orange-800':'bg-green-100 text-green-800');
+                return `<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-sm font-mono">${r.id}</td><td class="px-4 py-3 text-sm">${r.name}</td><td class="px-4 py-3 text-sm">${r.opd}</td><td class="px-4 py-3 text-sm">${r.tahun||'-'}</td>
+                <td class="px-4 py-3 text-sm">${r.tujuan||'-'}</td><td class="px-4 py-3 text-sm">${r.sasaran||'-'}</td><td class="px-4 py-3 text-sm">${r.program||'-'}</td><td class="px-4 py-3 text-sm">${r.iku||'-'}</td>
+                <td class="px-4 py-3 text-sm">${r.pemilik}</td><td class="text-center font-semibold">${r.skalaRisiko}</td><td class="text-center"><span class="px-2 py-1 rounded-full text-xs font-medium ${bg}">${lvl}</span></td>
+                <td class="text-center"><button onclick="editRisk('${r.id}')" class="text-indigo-600"><i class="fas fa-edit"></i> Edit</button></td></tr>`}).join('')}</tbody>}</div></div>`;
+            contentDiv.innerHTML = html;
+            document.getElementById('createRsoBtn')?.addEventListener('click',()=> showRiskModal('Strategis'));
+        }
+
+        function renderROO() {
+            pageTitle.innerText = "Risiko Operasional (ROO)";
+            let filtered = getFilteredRisks().filter(r => r.category !== "Strategis");
+            let html = `<div class="mb-4 flex justify-end"><button id="createRooBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow-md transition flex items-center gap-2"><i class="fas fa-plus"></i> Tambah ROO</button></div>
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden"><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gradient-to-r from-gray-100 to-gray-200"><tr><th class="px-4 py-3 text-left text-xs font-semibold">Kode</th><th>Uraian</th><th>OPD</th><th>Tahun</th><th>Program</th><th>Kegiatan</th><th>Sub Kegiatan</th><th>Pemilik</th><th class="text-center">Skala</th><th class="text-center">Level</th><th class="text-center">Aksi</th></tr></thead>
+                <tbody>${filtered.map(r => { let lvl=getRiskLevel(r.skalaRisiko); let bg=lvl==='Tinggi'?'bg-red-100 text-red-800':(lvl==='Sedang'?'bg-orange-100 text-orange-800':'bg-green-100 text-green-800');
+                return `<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-sm font-mono">${r.id}</td><td class="px-4 py-3 text-sm">${r.name}</td><td class="px-4 py-3 text-sm">${r.opd}</td><td class="px-4 py-3 text-sm">${r.tahun||'-'}</td>
+                <td class="px-4 py-3 text-sm">${r.program||'-'}</td><td class="px-4 py-3 text-sm">${r.kegiatan||'-'}</td><td class="px-4 py-3 text-sm">${r.subKegiatan||'-'}</td><td class="px-4 py-3 text-sm">${r.pemilik}</td>
+                <td class="text-center font-semibold">${r.skalaRisiko}</td><td class="text-center"><span class="px-2 py-1 rounded-full text-xs font-medium ${bg}">${lvl}</span></td>
+                <td class="text-center"><button onclick="editRisk('${r.id}')" class="text-indigo-600"><i class="fas fa-edit"></i> Edit</button></td></tr>`}).join('')}</tbody>}</div></div>`;
+            contentDiv.innerHTML = html;
+            document.getElementById('createRooBtn')?.addEventListener('click',()=> showRiskModal('Operasional'));
+        }
+
+        function renderRiskRegister() {
+            let filtered = getFilteredRisks();
+            pageTitle.innerText = "Risk Register & Penilaian Risiko (FGD)";
+            let html = `<div class="mb-4 flex justify-end"><button onclick="showRiskModal('Strategis')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow-md transition flex items-center gap-2"><i class="fas fa-plus"></i> Tambah Risiko Baru</button></div>
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden"><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 risk-table">
+                <thead class="bg-gradient-to-r from-gray-100 to-gray-200"><tr><th class="px-3 py-3 text-left text-xs font-semibold">Kode</th><th>Risiko</th><th>Kategori</th><th>OPD</th><th>Tahun</th><th>Program/Sasaran</th><th class="text-center">Dampak</th><th class="text-center">Kemungkinan</th><th class="text-center">Skala</th><th class="text-center">Level</th><th class="text-left">Rencana Tindak (RTP)</th><th class="text-center">Aksi</th></tr></thead>
+                <tbody>${filtered.map(r => { let level = getRiskLevel(r.skalaRisiko); let bgLevel = level === 'Tinggi' ? 'bg-red-100 text-red-800' : (level === 'Sedang' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800');
+                return `<tr class="hover:bg-gray-50"><td class="px-3 py-2 text-sm font-mono">${r.id}</td><td class="px-3 py-2 text-sm">${r.name}</td><td class="px-3 py-2 text-sm"><span class="px-2 py-0.5 rounded bg-gray-100">${r.category}</span></td>
+                <td class="px-3 py-2 text-sm">${r.opd}</td><td class="px-3 py-2 text-sm">${r.tahun || '-'}</td><td class="px-3 py-2 text-sm">${r.category=='Strategis' ? (r.tujuan||'') : (r.program||'')}</td>
+                <td class="px-3 py-2 text-center text-sm font-mono">${r.dampakSkor}</td><td class="px-3 py-2 text-center text-sm font-mono">${r.kemungkinanSkor}</td>
+                <td class="px-3 py-2 text-center font-semibold">${r.skalaRisiko}</td><td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${bgLevel}">${level}</span></td>
+                <td class="px-3 py-2 text-sm break-words max-w-xs">${r.rencanaMitigasi || '-'}</td>
+                <td class="px-3 py-2 text-center"><button onclick="editRisk('${r.id}')" class="text-indigo-600"><i class="fas fa-edit"></i> Nilai</button></td></tr>`}).join('')}</tbody>}</div></div>`;
+            contentDiv.innerHTML = html;
+        }
+
+        function renderMitigasi() {
+            let filtered = getFilteredRisks();
+            pageTitle.innerText = "Rencana Tindak Pengendalian (RTP) & Mitigasi";
+            let html = `<div class="bg-white rounded-xl shadow-lg overflow-hidden"><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 mitigasi-table">
+                <thead class="bg-gradient-to-r from-gray-100 to-gray-200"><tr><th class="px-4 py-3 text-left text-xs font-semibold">Kode</th><th>Risiko</th><th>OPD</th><th>Tahun</th><th>Pengendalian Ada</th><th>Rencana Tindak (RTP)</th><th>Penanggung Jawab</th><th>Target</th><th class="text-center">Status</th></tr></thead>
+                <tbody>${filtered.map(r => { let st = r.statusMitigasi || 'Baru'; let sc = st==='Selesai' ? 'bg-green-100 text-green-800' : (st.includes('Evaluasi')||st==='Proses'||st==='Rencana Kontijensi'||st==='Perbaikan sistem' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700');
+                return `<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-sm font-mono">${r.id}</td><td class="px-4 py-3 text-sm">${r.name}</td><td class="px-4 py-3 text-sm">${r.opd}</td><td class="px-4 py-3 text-sm">${r.tahun||'-'}</td>
+                <td class="px-4 py-3 text-sm">${r.controlExisting || '-'}</td><td class="px-4 py-3 text-sm break-words">${r.rencanaMitigasi || '-'}</td>
+                <td class="px-4 py-3 text-sm">${r.pemilik}</td><td class="px-4 py-3 text-sm">${r.targetWaktu || '-'}</td>
+                <td class="text-center"><span class="px-2 py-1 rounded-full text-xs font-medium ${sc}">${st}</span></td></tr>`}).join('')}</tbody>}</div></div>`;
+            contentDiv.innerHTML = html;
+        }
+
+        function renderMonitoringHeatmap() {
+            let filtered = getFilteredRisks();
+            pageTitle.innerText = "Monitoring & Heatmap";
+            let matrix = Array(5).fill().map(()=>Array(5).fill(0));
+            filtered.forEach(r=>{ let d=Math.min(r.dampakSkor,5)-1, k=Math.min(r.kemungkinanSkor,5)-1; if(d>=0&&k>=0) matrix[d][k]++; });
+            let html = `<div class="bg-white p-4 rounded-xl shadow"><h3 class="font-bold">Heatmap Dampak vs Kemungkinan</h3><div class="grid grid-cols-6 gap-1 text-center text-sm"><div></div>${[1,2,3,4,5].map(i=>`<div>Kem. ${i}</div>`).join('')}</div>`;
+            for(let i=0;i<5;i++){ html+=`<div class="grid grid-cols-6 gap-1 mt-1"><div class="font-bold">Dampak ${i+1}</div>`; for(let j=0;j<5;j++){ let val=matrix[i][j]; html+=`<div class="${val>0?'bg-red-200':'bg-gray-100'} p-1 rounded text-center">${val||0}</div>`; } html+=`</div>`; }
+            html+=`</div><canvas id="trendChart" height="100" class="mt-5"></canvas>`;
+            contentDiv.innerHTML = html;
+            setTimeout(()=>{ let ctx=document.getElementById('trendChart')?.getContext('2d'); if(ctx) new Chart(ctx,{type:'line',data:{labels:['Jan','Feb','Mar','Apr','Mei','Jun'],datasets:[{label:'Kejadian Risiko',data:[2,4,3,7,5,4]}]}}); },50);
+        }
+
+        function renderPelaporan() {
+            let filtered = getFilteredRisks();
+            pageTitle.innerText = "Laporan Risiko & Ekspor";
+            let opdSelector = '', yearSelector = '';
+            if(currentUser.role === 'Admin') {
+                let uniqueOpds = [...new Set(risks.map(r => r.opd).filter(o => o))];
+                let uniqueYears = [...new Set(risks.map(r => r.tahun).filter(y => y))].sort();
+                opdSelector = `<div class="flex-1"><label class="block text-sm font-medium mb-1">Pilih OPD</label><select id="printOpdSelect" class="w-full border rounded-lg px-3 py-2"><option value="">-- SEMUA OPD --</option>${uniqueOpds.map(opd => `<option value="${opd}">${opd}</option>`).join('')}</select></div>`;
+                yearSelector = `<div class="flex-1"><label class="block text-sm font-medium mb-1">Pilih Tahun</label><select id="printYearSelect" class="w-full border rounded-lg px-3 py-2"><option value="">-- SEMUA TAHUN --</option>${uniqueYears.map(y => `<option value="${y}">${y}</option>`).join('')}</select></div>`;
+            }
+            let html = `<div class="bg-white p-6 rounded-xl shadow"><h2 class="font-bold text-xl">Laporan Manajemen Risiko</h2><p>Total Risiko (akses Anda): ${filtered.length} | Risiko Tinggi: ${filtered.filter(r=>getRiskLevel(r.skalaRisiko)=='Tinggi').length}</p>
+                ${currentUser.role === 'Admin' ? `<div class="mb-4 flex gap-3 items-end flex-wrap">${opdSelector}${yearSelector}<button id="printSelectedFilter" class="bg-blue-600 text-white px-4 py-2 rounded h-10"><i class="fas fa-print"></i> Cetak Laporan (Filter)</button></div>` : ''}
+                <div class="mt-5 flex gap-3 flex-wrap"><button id="exportJson" class="bg-green-600 text-white px-4 py-2 rounded"><i class="fas fa-download"></i> Ekspor JSON (Data Saya)</button>
+                <button id="printReport" class="bg-blue-600 text-white px-4 py-2 rounded"><i class="fas fa-print"></i> Cetak Laporan (Data Saya)</button></div>
+                <div class="mt-5"><h3 class="font-semibold">Preview Data (JSON)</h3><pre class="bg-gray-100 p-4 rounded text-xs overflow-x-auto max-h-96">${JSON.stringify(filtered,null,2)}</pre></div></div>`;
+            contentDiv.innerHTML = html;
+            document.getElementById('exportJson')?.addEventListener('click',()=>{ let a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(filtered,null,2)],{type:'application/json'})); a.download='risk_report.json'; a.click(); });
+            document.getElementById('printReport')?.addEventListener('click',()=> printFullReport());
+            if(currentUser.role === 'Admin') document.getElementById('printSelectedFilter')?.addEventListener('click',() => { let opd = document.getElementById('printOpdSelect').value; let yr = document.getElementById('printYearSelect').value; printFullReport(opd || null, yr || null); });
+        }
+
+        function renderMaster() {
+            if(currentUser.role !== 'Admin') { pageTitle.innerText = "Master Data - Tidak Tersedia"; contentDiv.innerHTML = "<div class='bg-white p-5 rounded-xl shadow'>Hanya Admin yang dapat mengakses Master Data.</div>"; return; }
+            pageTitle.innerText = "Master Data";
+            let html = `<div class="bg-white p-5 rounded-xl shadow"><h3 class="font-bold">OPD</h3><div class="flex gap-2 my-2"><input id="newOpd" class="border rounded p-2 flex-1"><button id="addOpdBtn" class="bg-indigo-600 text-white px-4 rounded">Tambah</button></div><ul>${master.opd.map(o=>`<li class="flex justify-between py-1">${o} <button onclick="deleteOpd('${o}')" class="text-red-500"><i class="fas fa-trash"></i></button></li>`).join('')}</ul></div>`;
+            contentDiv.innerHTML = html;
+            document.getElementById('addOpdBtn')?.addEventListener('click',()=>{ let val=document.getElementById('newOpd').value.trim(); if(val){ master.opd.push(val); saveToLocal(); renderMaster(); } });
+        }
+        window.deleteOpd = (name)=>{ master.opd = master.opd.filter(o=>o!==name); saveToLocal(); renderMaster(); };
+
+        function renderSettings() {
+            pageTitle.innerText = "Pengaturan Sistem";
+            contentDiv.innerHTML = `<div class="bg-white p-5 rounded"><button id="resetBtn" class="bg-red-600 text-white px-4 py-2 rounded">Reset Data Awal (Admin Only)</button></div>`;
+            if(currentUser.role === 'Admin') document.getElementById('resetBtn')?.addEventListener('click',()=>{ resetLocalStorageAndReload(); });
+            else document.getElementById('resetBtn')?.setAttribute('disabled','disabled');
+        }
+
+        let currentPage = "dashboard";
+        const contentDiv = document.getElementById('pageContent');
+        const pageTitle = document.getElementById('pageTitle');
+
+        function renderPage(page) {
+            currentPage = page;
+            if(page==='dashboard') renderDashboard();
+            else if(page==='master') renderMaster();
+            else if(page==='rso') renderRSO();
+            else if(page==='roo') renderROO();
+            else if(page==='riskRegister') renderRiskRegister();
+            else if(page==='mitigasi') renderMitigasi();
+            else if(page==='monitoring') renderMonitoringHeatmap();
+            else if(page==='pelaporan') renderPelaporan();
+            else if(page==='profile') renderProfile();
+            else if(page==='users') renderUsers();
+            else if(page==='settings') renderSettings();
+        }
+
+        function bindNavEvents() {
+            document.querySelectorAll('.nav-link').forEach(link=>{
+                link.addEventListener('click',(e)=>{ e.preventDefault(); let page = link.getAttribute('data-page'); if(page) renderPage(page);
+                document.querySelectorAll('.nav-link').forEach(l=>l.classList.remove('bg-indigo-50','text-indigo-700')); link.classList.add('bg-indigo-50','text-indigo-700'); });
+            });
+        }
+
+        // LOGIN
+        const loginContainer = document.getElementById('loginContainer');
+        const appContainer = document.getElementById('appContainer');
+        const loginErrorMsg = document.getElementById('loginErrorMsg');
+        document.getElementById('loginForm').addEventListener('submit',(e)=>{
+            e.preventDefault(); let user = document.getElementById('username').value; let pass = document.getElementById('password').value;
+            if(!users || users.length === 0) initData(true);
+            let found = users.find(u=>u.username === user && u.password === pass);
+            if(found){
+                currentUser = found;
+                loginContainer.style.display = 'none';
+                appContainer.style.display = 'flex';
+                bindNavEvents();
+                renderPage('dashboard');
+                document.getElementById('userDisplay').innerText = currentUser.username;
+                document.getElementById('userOpdDisplay').innerText = currentUser.opd ? `(${currentUser.opd})` : '';
+                updateDateTime();
+                loginErrorMsg.innerText = '';
+            } else { loginErrorMsg.innerText = "Username atau password salah. Hubungi Admin untuk Reset (081247124864)"; }
+        });
+        document.getElementById('logoutBtn').addEventListener('click',()=>{ currentUser = null; loginContainer.style.display = 'flex'; appContainer.style.display = 'none'; });
+        document.getElementById('forceResetBtn').addEventListener('click',()=>{ resetLocalStorageAndReload(); });
+        initData();
+    </script>
+</body>
+</html>
